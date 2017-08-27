@@ -65,30 +65,36 @@ Pour ce faire j'ai utilisé la bibliothèque ggmap pour avoir la carte de Paris et
 La densité des accidents en général est concentré sur les grandes routes (Rocade de Paris et autoroutes) mais ils sont rarement graves, le taux d'accidents graves est élevée au nord et au sud de Paris.    
 Alors qu'en centre les accidents paraissent de moins en moins, ça peut être du à l'utilisation des transport en commun au lieu des véhicules personnels.
 ```{r message=F}
+#merging data
 df1<-merge(users,characteristics)
 df1<-df1[,c("grav","lat","long")]
-df1<-dplyr::filter(df1,df1[,"lat"]!=0)
+
+#Remove datas which has no long an lat parameters
+df1<-dplyr::filter(df1,df1[,"lat"]!=0 & df1[,"long"]!=0)
+
+#Switching levels to 2 instead of 4 to define graveness
 df1$grav=factor(df1$grav)
 levels(df1$grav)=c("Pas grave","Grave","Grave","Pas grave")
-palet_couleur<-c('#520202','#21B6A8')
-names(palet_couleur)<-c("Grave","Pas grave")
+
+#Normalize longitude and latitude parameters
 df1$lat<-df1$lat/100000
 df1$long<-df1$long/100000
-#map<-get_map(location = 'france',zoom=6,maptype = "toner",source = 'google',color = 'color')
 
-#ggmap(map)+geom_point(aes(x=long,y=lat,show_guide=TRUE,colour=grav),df1,alpha=.5,na.rm=T)+scale_fill_manual(name="accidents",values = palet_couleur)
+#loading Paris map
 map2<-get_map(location = 'paris',zoom=10,maptype = "toner",source = 'google',color = 'color')
 ggmap(map2)+geom_point(aes(x=long,y=lat,colour=grav),df1,alpha=1,na.rm=T)
 ```
+
 ### Classification de la gravité d'accident
 
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r  echo=FALSE}
-plot(pressure)
+```{r}
+head(users)
+head(characteristics)
+head(locations)
+head(vehicle)
+df<-merge(merge(characteristics,users),merge(vehicle,locations))
+df<-df[,c("Num_Acc","mois","jour","hrmn","lum","dep","int","agg","com","atm","col","gps","lat","long","catr","voie","circ","nbv","vosp","prof","infra","situ","catu","place","sexe","an_nais","trajet","secu","locp","actp","etatp","catv","obs","obsm","choc","manv","grav")]
+str(df)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
