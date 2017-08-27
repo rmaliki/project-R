@@ -1,0 +1,69 @@
+---
+title: "Allianz: projet d'entretien"
+author: "Rochd MALIKI"
+date: "24 août 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Préambule
+
+Ce document s'agit d'une analyse statistique des sinistres corporel de l'année 2015. 
+
+#### Chargement des librairies
+
+```{r message=F}
+library("ggplot2")
+library("caret")
+library("randomForest")
+
+
+```
+#### Importation des données
+```{r message=FALSE}
+# Reading datasets
+characteristics<-read.csv("Données/caracteristiques_2015.csv")
+locations<-read.csv("Données/lieux_2015.csv")
+users<-read.csv("Données/usagers_2015.csv")
+vehicle<-read.csv("Données/vehicules_2015.csv")
+```
+## Gravité des accidents
+On définit la gravité des accidents à partir de l'attribut "grav" de la base de données [usagers_2015.csv](Données/usagers_2015.csv) en changeant la caractérisation à 2 niveaux ('Pas grave', 'Grave'), au lieu de 4 niveaux ('Indemne', 'Blessé leger', 'Blessé hospitalisé', 'Tué'), la classe 'Grave' remplace ('Tué','Blessé hospitalisé') et 'Pas grave' remplace ('Indemne', 'Blessé leger')
+### Visualisation de la gravité en  foction de la tranche d'age
+```{r message=F}
+#Removing missing values
+#NAindex <- apply(users,2,function(x) {sum(is.na(x))}) 
+#users <- users[,which(NAindex == 0)]
+newus<-users
+newus$grav=factor(newus$grav)
+levels(newus$grav)=c("Pas grave","Grave","Grave","Pas grave")
+newus$catu=factor(newus$catu,labels = c("Conducteur","Passager","Piéton ","Piéton en roller"))
+#qplot(an_nais,data=newus,color=grav,binwidth=10,xlim =c(1925,2005))
+ggplot(newus, aes(an_nais))+geom_histogram()
+
+```
+
+### Gravité et catégorie du vehicule
+```{r}
+df<-merge(users, vehicle)
+df$grav=factor(df$grav)
+levels(df$grav)=c("Pas grave","Grave","Grave","Pas grave")
+df$grav=factor(df$grav)
+df$catu=factor(df$catu,labels = c("Conducteur","Passager","Piéton ","Piéton en roller"))
+qplot(an_nais,catv,data=df,color=grav,xlim =c(1925,2005))
+```
+
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r  echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

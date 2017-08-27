@@ -1,0 +1,94 @@
+---
+title: 'Allianz: projet d''entretien'
+author: "Rochd MALIKI"
+date: "24 aoÃfÂ»t 2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Préambule
+
+Ce document s'agit d'une analyse statistique des sinistres corporel de l'année 2015. 
+
+#### Chargement des librairies
+
+```{r message=F}
+library("ggplot2")
+library("caret")
+library("ggmap")
+library("plotly")
+#library("randomForest")
+
+
+```
+#### Importation des données
+```{r message=FALSE}
+# Reading datasets
+characteristics<-read.csv("Données/caracteristiques_2015.csv")
+locations<-read.csv("Données/lieux_2015.csv")
+users<-read.csv("Données/usagers_2015.csv")
+vehicle<-read.csv("Données/vehicules_2015.csv")
+```
+## Gravité des accidents
+J'ai définit la gravité des accidents à partir de l'attribut "grav" de la base de données [usagers_2015.csv](Données/usagers_2015.csv) en changeant la caractérisation à 2 niveaux ('Pas grave', 'Grave'), au lieu de 4 niveaux ('Indemne', 'Blessé leger', 'Blessé hospitalisé', 'Tué'), la classe 'Grave' remplace ('Tué','Blessé hospitalisé') et 'Pas grave' remplace ('Indemne', 'Blessé leger').
+
+### Visualisation de la gravité en  fonction de la tranche d'age
+Pour visualier la gravité de l'accident en fonction de des differentes tranches d'age, j'ai utilisé la bibiothèque ggplot et ggplotly pour avoir un rendu html interactif.    
+Les personnes agées sont plus suceptible à mourir ou avoir une grave blessure lors d'une accident.
+```{r message=F}
+newus<-users[,c("an_nais","grav")]
+#Switching levels to 2 instead of 4 to define graveness
+newus$grav=factor(newus$grav)
+levels(newus$grav)=c("Pas grave","Grave","Grave","Pas grave")
+require(scales)
+p<-ggplot(newus, aes(2015-an_nais,fill=grav))+geom_histogram(data = newus, aes(x=2015-an_nais,fill=grav),position="fill",binwidth =10,color='white')+ ylab("Pourcentage") +xlab("Age (an)")+ggtitle("Gravité & Age")
+#Indicators: (Grave=RED and Pas grave=Green)
+palet_couleur<-c('#520202','#21B6A8')
+names(palet_couleur)<-c("Grave","Pas grave")
+p<-p+scale_fill_manual(name="Gravité",values = palet_couleur)+scale_y_continuous(labels = scales::percent)
+p<-ggplotly(p)
+p%>%layout(paper_bgcolor='transparent',plot_bgcolor='transparent',yaxis=list(tickformat='%'))
+
+```
+
+
+
+
+### Gravité selon le lieu d'accident
+J'ai pris comme exemple la ville de Paris pour voir la region où la densité d'accidents graves est élevée.   
+Pour ce faire j'ai utilisé la bibliothèque ggmap pour avoir la carte de Paris et les coordonnées longitudinales et latitudinales dans la base de données [caracteristiques_2015.csv](Données/caracteristiques_2015.csv) après jointure avec celle de [usagers_2015.csv](Données/usagers_2015.csv) pour mettre en rapport le lieux de l'accident avec sa gravité.   
+La densité des accidents en général est concentré sur les grandes routes (Rocade de Paris et autoroutes) mais ils sont rarement graves, le taux d'accidents graves est élevée au nord et au sud de Paris.    
+Alors qu'en centre les accidents paraissent de moins en moins, ça peut être du à l'utilisation des transport en commun au lieu des véhicules personnels.
+```{r message=F}
+df1<-merge(users,characteristics)
+df1<-df1[,c("grav","lat","long")]
+df1<-dplyr::filter(df1,df1[,"lat"]!=0)
+df1$grav=factor(df1$grav)
+levels(df1$grav)=c("Pas grave","Grave","Grave","Pas grave")
+palet_couleur<-c('#520202','#21B6A8')
+names(palet_couleur)<-c("Grave","Pas grave")
+df1$lat<-df1$lat/100000
+df1$long<-df1$long/100000
+#map<-get_map(location = 'france',zoom=6,maptype = "toner",source = 'google',color = 'color')
+
+#ggmap(map)+geom_point(aes(x=long,y=lat,show_guide=TRUE,colour=grav),df1,alpha=.5,na.rm=T)+scale_fill_manual(name="accidents",values = palet_couleur)
+map2<-get_map(location = 'paris',zoom=10,maptype = "toner",source = 'google',color = 'color')
+ggmap(map2)+geom_point(aes(x=long,y=lat,colour=grav),df1,alpha=1,na.rm=T)
+```
+### Classification de la gravité d'accident
+
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r  echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
