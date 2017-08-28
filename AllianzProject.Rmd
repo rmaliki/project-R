@@ -1,7 +1,7 @@
 ---
 title: 'Allianz: projet d''entretien'
 author: "Rochd MALIKI"
-date: "24 aoÃfÂ»t 2017"
+date: "24 août 2017"
 output:
   html_document: default
   pdf_document: default
@@ -19,10 +19,15 @@ Ce document s'agit d'une analyse statistique des sinistres corporel de l'année 2
 
 ```{r message=F}
 library("ggplot2")
-library("caret")
 library("ggmap")
 library("plotly")
-#library("randomForest")
+library("rpart")
+library("rattle")
+library("rpart.plot")
+library("RColorBrewer")
+library("randomForest")
+library("nlme")
+library("ROCR")
 
 
 ```
@@ -38,8 +43,9 @@ vehicle<-read.csv("Données/vehicules_2015.csv")
 J'ai définit la gravité des accidents à partir de l'attribut "grav" de la base de données [usagers_2015.csv](Données/usagers_2015.csv) en changeant la caractérisation à 2 niveaux ('Pas grave', 'Grave'), au lieu de 4 niveaux ('Indemne', 'Blessé leger', 'Blessé hospitalisé', 'Tué'), la classe 'Grave' remplace ('Tué','Blessé hospitalisé') et 'Pas grave' remplace ('Indemne', 'Blessé leger').
 
 ### Visualisation de la gravité en  fonction de la tranche d'age
-Pour visualier la gravité de l'accident en fonction de des differentes tranches d'age, j'ai utilisé la bibiothèque ggplot et ggplotly pour avoir un rendu html interactif.    
-Les personnes agées sont plus suceptible à mourir ou avoir une grave blessure lors d'une accident.
+Pour visualier la gravité de l'accident en fonction des differentes tranches d'age, j'ai utilisé la bibiothèque ggplot et ggplotly pour avoir un rendu html interactif.    
+Les personnes agées sont plus suceptible à mourir ou avoir une grave blessure lors d'une accident. Ils sont de plus en plus faibles physiquement ce qui les rend plus sensible au chocs lors d'un accident.   
+L'attribut "an_nais" peut donc nous aider à estimer la gravité de l'accident.
 ```{r message=F}
 newus<-users[,c("an_nais","grav")]
 #Switching levels to 2 instead of 4 to define graveness
@@ -61,40 +67,161 @@ p%>%layout(paper_bgcolor='transparent',plot_bgcolor='transparent',yaxis=list(tic
 
 ### Gravité selon le lieu d'accident
 J'ai pris comme exemple la ville de Paris pour voir la region où la densité d'accidents graves est élevée.   
-Pour ce faire j'ai utilisé la bibliothèque ggmap pour avoir la carte de Paris et les coordonnées longitudinales et latitudinales dans la base de données [caracteristiques_2015.csv](Données/caracteristiques_2015.csv) après jointure avec celle de [usagers_2015.csv](Données/usagers_2015.csv) pour mettre en rapport le lieux de l'accident avec sa gravité.   
-La densité des accidents en général est concentré sur les grandes routes (Rocade de Paris et autoroutes) mais ils sont rarement graves, le taux d'accidents graves est élevée au nord et au sud de Paris.    
-Alors qu'en centre les accidents paraissent de moins en moins, ça peut être du à l'utilisation des transport en commun au lieu des véhicules personnels.
+Pour ce faire j'ai utilisé la bibliothèque ggmap pour avoir la carte de Paris et les coordonnées longitudinales et latitudinales dans la base de données [caracteristiques_2015.csv](Données/caracteristiques_2015.csv) après jointure avec celle de [usagers_2015.csv](Données/usagers_2015.csv) pour mettre en rapport le lieu de l'accident avec sa gravité.   
+La densité des accidents en général est concentrée sur les grandes routes (Rocade de Paris et autoroutes) mais ils sont rarement graves, le taux d'accidents graves est élevée au nord et au sud de Paris.    
+Alors qu'en centre les accidents paraissent de moins en moins, ça doit être du à l'utilisation des transport en commun au lieu des véhicules personnels.   
+
 ```{r message=F}
 #merging data
 df1<-merge(users,characteristics)
 df1<-df1[,c("grav","lat","long")]
 
-#Remove datas which has no long an lat parameters
-df1<-dplyr::filter(df1,df1[,"lat"]!=0 & df1[,"long"]!=0)
-
-#Switching levels to 2 instead of 4 to define graveness
-df1$grav=factor(df1$grav)
-levels(df1$grav)=c("Pas grave","Grave","Grave","Pas grave")
-
 #Normalize longitude and latitude parameters
 df1$lat<-df1$lat/100000
 df1$long<-df1$long/100000
 
+#Remove datas which has no long an lat parameters
+df2<-dplyr::filter(df1,df1[,"lat"]!=0 & df1[,"long"]!=0)
+
+#Switching levels to 2 instead of 4 to define graveness
+df2$grav=factor(df2$grav)
+levels(df2$grav)=c("Pas grave","Grave","Grave","Pas grave")
+
 #loading Paris map
-map2<-get_map(location = 'paris',zoom=10,maptype = "toner",source = 'google',color = 'color')
-ggmap(map2)+geom_point(aes(x=long,y=lat,colour=grav),df1,alpha=1,na.rm=T)
+map2<-get_map(location = 'paris',zoom=10,maptype = "roadmap",source = 'google',color = 'color')
+ggmap(map2)+geom_point(aes(x=long,y=lat,colour=grav),df2,alpha=1,na.rm=T)
+
+```
+
+### Densité de population et accidents:
+Pour mettre en rapport la densité de population et le nombre d'accidents, j'ai trouvé des données sur le lien: <http://simplemaps.com/data/world-cities> contenant la population des villes du monde, j'ai filtré ceux de la France pour comparer avec les lieux où les accidents sont nombreux.   
+On constate que les zones où il y a une grande population sont plus sensible aux accidents.
+```{r message=FALSE}
+#Loading data
+ddf<-read.csv("Données/francePop.csv")
+
+#Filter to get french cities population
+ddf<-dplyr::filter(ddf,ddf[,"country"]=="France")
+
+#loading France map
+map2<-get_map(location = 'france',zoom=6,maptype = "terrain",source = 'google',color = 'color')
+
+#plotting datas from bot datasets
+ggmap(map2)+geom_point(aes(x=lng,y=lat,colour=pop),ddf,alpha=.5,size=15,na.rm=T)+scale_color_gradient(low = "#FFA500",high="red")+geom_point(aes(x=long,y=lat),df1,alpha=.05,na.rm=T)
+
+
 ```
 
 ### Classification de la gravité d'accident
-
-```{r}
-head(users)
-head(characteristics)
-head(locations)
-head(vehicle)
+Pour faire une classification de gravité d'accident j'ai préparé une base de données dans laquelle j'ai choisi les attributs qui me paraissent utiles pour la classification.   
+Ensuite, j'ai definit la nature de chaque attribut.
+```{r message=F}
+#Preparing learning dataset
 df<-merge(merge(characteristics,users),merge(vehicle,locations))
-df<-df[,c("Num_Acc","mois","jour","hrmn","lum","dep","int","agg","com","atm","col","gps","lat","long","catr","voie","circ","nbv","vosp","prof","infra","situ","catu","place","sexe","an_nais","trajet","secu","locp","actp","etatp","catv","obs","obsm","choc","manv","grav")]
-str(df)
+df<-df[,c("Num_Acc","mois","jour","hrmn","lum","dep","int","agg","com","atm","col","gps","lat","long","catr","voie","circ","nbv","vosp","prof","plan","surf","infra","situ","catu","place","sexe","an_nais","trajet","secu","locp","actp","etatp","catv","obs","obsm","choc","manv","grav")]
+
+#Switching classifier levels to 2 instead of 4 to define graveness
+df$grav=factor(df$grav)
+levels(df$grav)=c("Pas grave","Grave","Grave","Pas grave")
+
+#Setting categorial attributes
+categorial_attributes<-c("lum","int","agg","atm","col","gps","catr","circ","vosp","prof","plan","surf","infra","situ","catu","place","sexe","trajet","secu","locp","actp","etatp","catv","obs","obsm","choc","manv","grav")
+df[categorial_attributes] <- lapply(df[categorial_attributes], factor)
+
 ```
+#### L'obstacle fixe heurté et gravité d'accident
+En se basant sur la nature d'obstacle heurté, on peut créer un modèle d'arbre de décision en faisant des split uniquement par rapport à l'attribut obs; mais il s'avère que cette methode ne donne pas une bonne classification.   
+C'est pourquoi nous allons opter pour l'utilisation des Random Forests afin de gagner en précision.
+```{r message=F}
+#Deleting missing values
+df <- na.omit(df)
+
+#Decision tree taining
+fit <- rpart(grav ~ manv, data=df, method="class")
+fancyRpartPlot(fit)
+```
+
+#### Random Forests et classification de données
+En se basant sur les differents attributs préparés precedemment, j'ai créee un modele pour predire la gravité de l'accident.   
+J'ai separé la base de données en 2 partie, 70ù pour la base d'apprentissage et 30% four les testes.   
+Pour afficher les variables selon leurs importance j'ai utilisé la fonction "varTmpPlot()" de la librairie "randomForest".   
+Pour voir les prédictions et la vraie gravité vous trouverez dans le fichier [compare_result.csv](Result/compare_result.csv) les deux colonnes de gravité réelle et prédite.
+```{r}
+
+#Splitting dataset for training and testing
+df$Num_Acc<-NULL
+train<-df[1:49156,]
+test<-df[49157:70223,]
+
+#Training with random forests with 200 trees
+fit <- randomForest(grav ~ .,data=train, importance=TRUE, ntree=200)
+
+#Plotting the variabe importance
+varImpPlot(fit)
+
+#Writing results to compare
+Prediction <- predict(fit, test)
+sub <- data.frame(RealGrav = test$grav, predictedGrav = Prediction)
+write.csv(sub, file = "Result/compare_result.csv", row.names = FALSE)
+
+
+
+```
+L'output de la fonction "varTmpPlot()" de la librairie "randomForest" montre que la variable la plus importante en terme de precision est "manv". La variable "secu" permet de bien séparer les classes en terme de pureté. 
+La supression de celles-ci peut engengrer une grande perte en terme de precision et de pureté des classes obtenues.
+
+##### Précision du modèle
+En comparant combien de fois nous avons eu une bonne prédiction sur le nombre total de prédictions, on obtient : 
+```{r echo=FALSE}
+
+#Calculating accuracy
+accuracy<-0
+
+for (i in 1:length(test$grav)){
+  if (Prediction[i]==test$grav[i]){
+    accuracy<-accuracy+1
+  }
+    
+}
+accuracy<-accuracy*100/length(test$grav)
+accuracy<-format(accuracy, digits=2, nsmall=2)
+cat(c("Précision de ",accuracy,"%"))
+
+```
+On trace la courbe ROC pour voir les performances de notre classificateur.
+
+```{r echo=F}
+#Converting the vector Prediction to numeric to fit in "prediction()" arguments
+Prediction_num=factor(Prediction)
+levels(Prediction_num)=c(1,2,2,1)
+y=factor(test$grav)
+levels(y)=c(1,2,2,1)
+Prediction_num=as.numeric(Prediction_num)
+
+pred <- prediction(Prediction_num, y);
+
+# ROC curve
+ROC.perf <- performance(pred, "tpr", "fpr");
+plot (ROC.perf);
+
+
+
+```
+     
+
+On calcule l'air sous la courbe afin de voir comment se comporte notre classificateur, on obtient une auc de:
+```{r echo=F}
+# ROC area under the curve
+auc.tmp <- performance(pred,"auc");
+auc <- as.numeric(auc.tmp@y.values)
+cat(auc)
+
+```
+
+
+### Conclusion:
+Le modèle effectue des predictions plus au moins bonnes qui peut être améliorer afin de gagner en précision et en auc.   
+On peut penser à un modèle qui donne de la valeur à la classe minoritaire "Pas grave" en exploitant les arbres de décision avec une entropie décentrée.
+
 
 
